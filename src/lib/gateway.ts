@@ -114,7 +114,12 @@ function isPrivateIpAddress(address: string) {
   );
 }
 
-async function validateUpstreamUrl(rawUrl: string) {
+async function validateUpstreamUrl(
+  rawUrl: string,
+  options?: {
+    allowLocalUpstream?: boolean;
+  },
+) {
   let upstreamUrl: URL;
 
   try {
@@ -128,6 +133,10 @@ async function validateUpstreamUrl(rawUrl: string) {
   }
 
   const hostname = upstreamUrl.hostname.toLowerCase();
+
+  if (options?.allowLocalUpstream) {
+    return upstreamUrl.toString();
+  }
 
   if (
     BLOCKED_HOSTS.has(hostname) ||
@@ -163,7 +172,12 @@ async function validateUpstreamUrl(rawUrl: string) {
   return upstreamUrl.toString();
 }
 
-export async function validateRouteInput(input: ApiRouteInput) {
+export async function validateRouteInput(
+  input: ApiRouteInput,
+  options?: {
+    allowLocalUpstream?: boolean;
+  },
+) {
   const providerName = input.providerName?.trim();
   const routeName = input.routeName?.trim();
   const description = normalizeOptional(input.description);
@@ -219,7 +233,7 @@ export async function validateRouteInput(input: ApiRouteInput) {
     description,
     slug: createSlug(input.slug ?? routeName),
     routeKind,
-    upstreamUrl: await validateUpstreamUrl(input.upstreamUrl ?? ""),
+    upstreamUrl: await validateUpstreamUrl(input.upstreamUrl ?? "", options),
     httpMethod: method,
     priceAmount: parsePositiveAmount(input.priceAmount ?? DEFAULT_PRICE_AMOUNT),
     currency: DEFAULT_CURRENCY,

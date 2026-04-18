@@ -2,13 +2,14 @@
 
 import {
   ApiOutlined,
+  ArrowRightOutlined,
   CopyOutlined,
   LinkOutlined,
-  LockOutlined,
   ThunderboltOutlined,
   WalletOutlined,
 } from "@ant-design/icons";
 import {
+  Alert,
   App as AntApp,
   Button,
   Card,
@@ -20,7 +21,7 @@ import {
   Statistic,
   Tag,
 } from "antd";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { AppShell } from "@/components/ui/app-shell";
 
@@ -68,6 +69,14 @@ export function SimpleDemoApp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const liveDemoUrl = useMemo(() => {
+    if (!generated) {
+      return null;
+    }
+
+    return `/demo/${generated.route.slug}`;
+  }, [generated]);
+
   async function copy(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -109,37 +118,36 @@ export function SimpleDemoApp() {
           <div style={{ padding: 32 }} className="hero-grid">
             <div className="page-stack">
               <div className="section-heading">
-                <span className="section-kicker">Simple demo</span>
+                <span className="section-kicker">Page 1 of 2</span>
                 <h1 className="section-title">
-                  Paste an API endpoint. Generate a paid endpoint instantly.
+                  Create a paid API endpoint in one step.
                 </h1>
                 <p className="section-copy">
-                  The generated endpoint keeps the original API response locked until
-                  payment is received. No seller auth, no dashboard, no setup ceremony.
+                  This page only does one job: generate a monetized endpoint. The next
+                  page will call it, complete payment, and show the unlocked response.
                 </p>
               </div>
 
               <div className="metric-grid">
                 <Card>
-                  <Statistic title="Input" value="Original API URL" prefix={<ApiOutlined />} />
+                  <Statistic title="Flow" value="2 pages" prefix={<ApiOutlined />} />
                 </Card>
                 <Card>
-                  <Statistic title="Output" value="Paid gateway endpoint" prefix={<LockOutlined />} />
+                  <Statistic title="Price per call" value="0.02 USDC" prefix={<WalletOutlined />} />
                 </Card>
                 <Card>
-                  <Statistic title="Price" value="0.02 USDC" prefix={<WalletOutlined />} />
+                  <Statistic title="Setup" value="No auth" prefix={<ThunderboltOutlined />} />
                 </Card>
               </div>
             </div>
 
             <Card className="section-surface">
               <Space orientation="vertical" size={18} style={{ width: "100%" }}>
-                <Tag color="blue">How it works</Tag>
+                <Tag color="blue">Simplified seller flow</Tag>
                 <ul className="bullet-list">
-                  <li>Paste the upstream API endpoint you want to monetize.</li>
-                  <li>Get a new paid endpoint generated on the spot.</li>
-                  <li>Agents call the paid endpoint, receive a payment challenge, pay, and retry.</li>
-                  <li>The original response unlocks only after payment verification.</li>
+                  <li>Create a paid proxy for any public API URL.</li>
+                  <li>Or leave the URL empty and use the built-in demo upstream.</li>
+                  <li>Open the second page to run a paid request end to end.</li>
                 </ul>
               </Space>
             </Card>
@@ -150,16 +158,22 @@ export function SimpleDemoApp() {
           <Card className="section-surface">
             <Space orientation="vertical" size={18} style={{ width: "100%" }}>
               <div className="section-heading">
-                <span className="section-kicker">Create paid endpoint</span>
-                <h2 style={{ margin: 0 }}>One form. One endpoint. Ready for demo.</h2>
+                <span className="section-kicker">Create endpoint</span>
+                <h2 style={{ margin: 0 }}>Generate the route</h2>
+                <p className="section-copy">
+                  The upstream URL is optional for the demo. If you leave it blank, the
+                  app will connect the paid route to an internal sample API.
+                </p>
               </div>
 
               <Space orientation="vertical" size={14} style={{ width: "100%" }}>
                 <div>
-                  <div className="muted" style={{ marginBottom: 8 }}>Original API endpoint</div>
+                  <div className="muted" style={{ marginBottom: 8 }}>
+                    Upstream API URL
+                  </div>
                   <Input
                     size="large"
-                    placeholder="https://api.example.com/v1/premium"
+                    placeholder="Leave empty to use the built-in demo upstream"
                     value={form.upstreamUrl}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, upstreamUrl: event.target.value }))
@@ -169,10 +183,12 @@ export function SimpleDemoApp() {
 
                 <div className="detail-grid">
                   <div>
-                    <div className="muted" style={{ marginBottom: 8 }}>Route label (optional)</div>
+                    <div className="muted" style={{ marginBottom: 8 }}>
+                      Endpoint label
+                    </div>
                     <Input
                       size="large"
-                      placeholder="Premium sentiment API"
+                      placeholder="Premium summary API"
                       value={form.routeName}
                       onChange={(event) =>
                         setForm((current) => ({ ...current, routeName: event.target.value }))
@@ -181,7 +197,9 @@ export function SimpleDemoApp() {
                   </div>
 
                   <div>
-                    <div className="muted" style={{ marginBottom: 8 }}>HTTP method</div>
+                    <div className="muted" style={{ marginBottom: 8 }}>
+                      HTTP method
+                    </div>
                     <Select
                       size="large"
                       value={form.httpMethod}
@@ -206,10 +224,10 @@ export function SimpleDemoApp() {
                   loading={busy}
                   onClick={() => void createPaidEndpoint()}
                 >
-                  Generate paid endpoint
+                  Create paid endpoint
                 </Button>
 
-                {error ? <Result status="error" title={error} /> : null}
+                {error ? <Alert type="error" message={error} showIcon /> : null}
               </Space>
             </Space>
           </Card>
@@ -218,11 +236,11 @@ export function SimpleDemoApp() {
             {generated ? (
               <Space orientation="vertical" size={18} style={{ width: "100%" }}>
                 <div className="section-heading">
-                  <span className="section-kicker">Generated endpoint</span>
+                  <span className="section-kicker">Endpoint created</span>
                   <h2 style={{ margin: 0 }}>{generated.route.routeName}</h2>
                   <p className="section-copy">
-                    Your new paid endpoint is live. The upstream response will stay locked
-                    until the payment flow succeeds.
+                    Your paid endpoint is ready. Open the second page to trigger a paid
+                    invocation and reveal the final response after payment verification.
                   </p>
                 </div>
 
@@ -231,12 +249,14 @@ export function SimpleDemoApp() {
                   items={[
                     {
                       key: "upstream",
-                      label: "Original endpoint",
-                      children: <span className="inline-code">{generated.upstreamUrl}</span>,
+                      label: "Upstream",
+                      children: (
+                        <span className="inline-code">{generated.upstreamUrl ?? "Built-in demo upstream"}</span>
+                      ),
                     },
                     {
                       key: "paid",
-                      label: "Paid endpoint",
+                      label: "Gateway URL",
                       children: <span className="inline-code">{generated.gatewayUrl}</span>,
                     },
                     {
@@ -246,26 +266,46 @@ export function SimpleDemoApp() {
                     },
                     {
                       key: "network",
-                      label: "Payment network",
+                      label: "Payment rail",
                       children: `${generated.payment.network} · chain ${generated.payment.chainId}`,
                     },
                   ]}
                 />
 
                 <div className="card-actions">
-                  <Button icon={<CopyOutlined />} onClick={() => void copy(generated.gatewayUrl, "Paid endpoint")}>
-                    Copy paid endpoint
+                  <Button
+                    type="primary"
+                    href={liveDemoUrl ?? undefined}
+                    icon={<ArrowRightOutlined />}
+                  >
+                    Open live payment demo
                   </Button>
-                  <Button icon={<CopyOutlined />} onClick={() => void copy(generated.examples.mppx, "mppx command")}>
-                    Copy mppx command
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() => void copy(generated.gatewayUrl, "Paid endpoint")}
+                  >
+                    Copy endpoint
+                  </Button>
+                  <Button
+                    icon={<CopyOutlined />}
+                    onClick={() => void copy(generated.examples.mppx, "mppx command")}
+                  >
+                    Copy mppx example
                   </Button>
                 </div>
+
+                <Alert
+                  type="success"
+                  showIcon
+                  message="Next step"
+                  description="Use the live demo page to create a paid invocation, complete payment, and inspect the unlocked API response."
+                />
               </Space>
             ) : (
               <Result
                 status="info"
-                title="No paid endpoint yet"
-                subTitle="Generate one from an upstream API URL and the contract will appear here."
+                title="No endpoint created yet"
+                subTitle="Generate a paid endpoint and the launch link for page two will appear here."
               />
             )}
           </Card>
@@ -288,13 +328,27 @@ export function SimpleDemoApp() {
 
             <Card className="section-surface">
               <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-                <span className="section-kicker">Paid request</span>
-                <pre className="code-block">{generated.examples.mppx}</pre>
+                <span className="section-kicker">Live demo page</span>
+                <Descriptions
+                  column={1}
+                  items={[
+                    {
+                      key: "route",
+                      label: "Demo URL",
+                      children: <span className="inline-code">{liveDemoUrl}</span>,
+                    },
+                    {
+                      key: "sample",
+                      label: "Sample request body",
+                      children: <span className="inline-code">{generated.examples.sampleBody}</span>,
+                    },
+                  ]}
+                />
                 <Button
                   icon={<LinkOutlined />}
-                  onClick={() => void copy(generated.examples.sampleBody, "sample request body")}
+                  href={liveDemoUrl ?? undefined}
                 >
-                  Copy sample body
+                  Open page two
                 </Button>
               </Space>
             </Card>

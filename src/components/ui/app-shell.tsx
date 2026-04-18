@@ -6,7 +6,7 @@ import type { PropsWithChildren, ReactNode } from "react";
 
 const { Header, Content } = Layout;
 
-type CurrentView = "home" | "dashboard" | "admin";
+type CurrentView = "home" | "demo" | "dashboard" | "admin";
 
 export function AppShell({
   children,

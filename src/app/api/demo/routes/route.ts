@@ -26,20 +26,29 @@ export async function POST(request: Request) {
       httpMethod?: string;
     };
 
-    const upstreamUrl = body.upstreamUrl?.trim() ?? "";
-    const routeName = body.routeName?.trim() || deriveRouteName(upstreamUrl);
+    const inputUpstreamUrl = body.upstreamUrl?.trim() ?? "";
+    const builtInDemoUpstreamUrl = new URL("/api/demo/upstream", request.url).toString();
+    const upstreamUrl = inputUpstreamUrl || builtInDemoUpstreamUrl;
+    const routeName =
+      body.routeName?.trim() ||
+      (inputUpstreamUrl ? deriveRouteName(upstreamUrl) : "Demo Response API");
     const slugBase = createSlug(`paid-${routeName}`);
     const slug = `${slugBase}-${randomUUID().slice(0, 8)}`;
+    const usingBuiltInUpstream = upstreamUrl === builtInDemoUpstreamUrl;
 
     const validated = await validateRouteInput({
       providerName: "AgentPaywall Demo",
       routeName,
       slug,
-      description: `Paid proxy for ${upstreamUrl}`,
+      description: usingBuiltInUpstream
+        ? "Paid gateway for the built-in demo upstream."
+        : `Paid proxy for ${upstreamUrl}`,
       routeKind: "external_proxy",
       upstreamUrl,
       httpMethod: (body.httpMethod?.toUpperCase() || "POST") as never,
       priceAmount: "0.02",
+    }, {
+      allowLocalUpstream: usingBuiltInUpstream,
     });
 
     const route = await createRoute({
