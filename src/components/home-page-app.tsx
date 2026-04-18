@@ -27,7 +27,7 @@ export function HomePageApp({
     <AppShell current="home">
       <div className="page-stack">
         <section className="hero-surface">
-          <div style={{ padding: 32 }}>
+          <div className="surface-pad">
             <div className="hero-grid">
               <div className="page-stack">
                 <div className="section-heading">

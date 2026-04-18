@@ -292,7 +292,7 @@ export function PaywallApp({
   return (
     <div className="page-stack">
       <section className="hero-surface">
-        <div style={{ padding: 32 }} className="hero-grid">
+        <div className="hero-grid surface-pad">
           <div className="page-stack">
             <div className="section-heading">
               <span className="section-kicker">Buyer demo</span>

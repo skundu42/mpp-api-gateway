@@ -20,6 +20,13 @@ export const metadata: Metadata = {
   title: "AgentPaywall",
   description:
     "Tempo + MPP pay-per-call gateway for premium APIs and digital services.",
+  icons: {
+    icon: [
+      { url: "/logo-mark.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/logo-mark.svg",
+    apple: "/logo-mark.svg",
+  },
 };
 
 export default function RootLayout({

@@ -115,7 +115,7 @@ export function SimpleDemoApp() {
     <AppShell current="home">
       <div className="page-stack">
         <section className="hero-surface">
-          <div style={{ padding: 32 }} className="hero-grid">
+          <div className="hero-grid surface-pad">
             <div className="page-stack" style={{ gridColumn: '1 / -1' }}>
               <div className="section-heading">
                 <h1 className="section-title">

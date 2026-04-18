@@ -881,7 +881,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
     >
       <div className="page-stack">
         <section className="hero-surface">
-          <div style={{ padding: 32 }} className="page-stack">
+          <div className="page-stack surface-pad">
             <div className="section-heading">
               <span className="section-kicker">Page 2 of 2</span>
               <h1 className="section-title">Watch the paid API journey unfold step by step.</h1>
