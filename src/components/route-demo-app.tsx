@@ -846,16 +846,6 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 />
 
                 <div className="card-actions">
-                  {agent?.lastFundingExplorerUrl ? (
-                    <Button
-                      icon={<LinkOutlined />}
-                      href={agent.lastFundingExplorerUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open funding tx
-                    </Button>
-                  ) : null}
                   {paymentExplorerUrl ? (
                     <Button
                       icon={<LinkOutlined />}
