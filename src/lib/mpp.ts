@@ -288,8 +288,12 @@ async function handleTempoCredentialExecution(options: {
     return charge.challenge;
   }
 
+  const receipt = Receipt.fromResponse(
+    charge.withReceipt(new Response(null, { status: 204 })),
+  );
+  await markVerifiedPayment(payment, receipt);
   const execution = await executeInvocationById(bundle.invocation.id);
-  const response = charge.withReceipt(
+  return charge.withReceipt(
     Response.json({
       resourceId: options.route.slug,
       invocationId: bundle.invocation.id,
@@ -297,9 +301,6 @@ async function handleTempoCredentialExecution(options: {
       provider: "tempo_testnet",
     }),
   );
-  const receipt = Receipt.fromResponse(response);
-  await markVerifiedPayment(payment, receipt);
-  return response;
 }
 
 async function handleTempoChallenge(options: {
