@@ -1,13 +1,16 @@
-'use client'
+"use client";
 
 import {
+  ApiOutlined,
   ArrowLeftOutlined,
+  CheckCircleFilled,
   CopyOutlined,
   LinkOutlined,
+  LockOutlined,
   RobotOutlined,
   ThunderboltOutlined,
-  WalletOutlined
-} from '@ant-design/icons'
+  WalletOutlined,
+} from "@ant-design/icons";
 import {
   Alert,
   App as AntApp,
@@ -18,353 +21,853 @@ import {
   Result,
   Space,
   Spin,
-  Statistic,
-  Tag
-} from 'antd'
-import { useEffect, useMemo, useState } from 'react'
+  Tag,
+} from "antd";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { AppShell } from '@/components/ui/app-shell'
-import { formatStatusLabel, getStatusColor } from '@/lib/ui'
-import type { ApiInvocationResult, PublicApiRoute } from '@/lib/types'
+import { AppShell } from "@/components/ui/app-shell";
+import { formatStatusLabel, getStatusColor } from "@/lib/ui";
+import type { ApiInvocationResult, PublicApiRoute } from "@/lib/types";
 
 const BODYLESS_METHODS = new Set(["GET"]);
 const AGENT_FUND_AMOUNT = "0.10";
 
 type RouteContractPayload = {
-  route: PublicApiRoute
-  gatewayUrl: string
+  route: PublicApiRoute;
+  gatewayUrl: string;
   payment: {
-    method: string
-    network: string
-    chainId: number
-    currencyContract: string
-    explorerBaseUrl: string
-    rpcUrl: string
-  }
+    method: string;
+    network: string;
+    chainId: number;
+    currencyContract: string;
+    explorerBaseUrl: string;
+    rpcUrl: string;
+  };
   examples: {
-    curl: string
-    mppx: string
-    sampleBody: string
-  }
-}
+    curl: string;
+    mppx: string;
+    sampleBody: string;
+  };
+};
 
 type AgentWalletPayload = {
-  id: string
-  address: string
-  routeSlug: string
+  id: string;
+  address: string;
+  routeSlug: string;
   balance: {
-    raw: string
-    formatted: string
-    symbol: string
-  }
-  lastFundingTxHash?: string
-  lastFundingExplorerUrl?: string | null
-  lastPaymentReference?: string
-  lastPaymentExplorerUrl?: string | null
-  createdAt: string
-  updatedAt: string
-}
+    raw: string;
+    formatted: string;
+    symbol: string;
+  };
+  lastFundingTxHash?: string;
+  lastFundingExplorerUrl?: string | null;
+  lastPaymentReference?: string;
+  lastPaymentExplorerUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type AgentCreateResponse = {
-  agent: AgentWalletPayload
-}
+  agent: AgentWalletPayload;
+};
 
 type AgentFundResponse = {
-  agent: AgentWalletPayload
-  fundedAmount: string
-}
+  agent: AgentWalletPayload;
+  fundedAmount: string;
+};
 
 type AgentInvokeResponse = {
-  agent: AgentWalletPayload
-  invocationId: string
-  paymentReference: string
-  paymentExplorerUrl?: string | null
-  result: ApiInvocationResult
-}
+  agent: AgentWalletPayload;
+  invocationId: string;
+  paymentReference: string;
+  paymentExplorerUrl?: string | null;
+  result: ApiInvocationResult;
+};
+
+type JourneyStepId = "boot" | "fund" | "prepare" | "invoke" | "response";
+type JourneyStepState = "pending" | "active" | "completed" | "error";
+
+type JourneyStepDefinition = {
+  id: JourneyStepId;
+  label: string;
+  title: string;
+  description: string;
+  icon: ReactNode;
+};
+
+type RequestBodyState = {
+  parsed?: Record<string, unknown>;
+  error: string | null;
+  isValid: boolean;
+};
+
+const JOURNEY_STEPS: JourneyStepDefinition[] = [
+  {
+    id: "boot",
+    label: "Step 1",
+    title: "Boot demo agent",
+    description: "Load the route contract and create a dedicated Tempo testnet wallet.",
+    icon: <RobotOutlined />,
+  },
+  {
+    id: "fund",
+    label: "Step 2",
+    title: "Fund wallet",
+    description: "Top up the demo agent so it can satisfy the MPP payment challenge.",
+    icon: <WalletOutlined />,
+  },
+  {
+    id: "prepare",
+    label: "Step 3",
+    title: "Prepare request",
+    description: "Validate the payload the agent will submit to the paid endpoint.",
+    icon: <ApiOutlined />,
+  },
+  {
+    id: "invoke",
+    label: "Step 4",
+    title: "Pay and invoke",
+    description: "Send the paid request through the gateway and collect the proof.",
+    icon: <ThunderboltOutlined />,
+  },
+  {
+    id: "response",
+    label: "Step 5",
+    title: "View proof and response",
+    description: "Inspect the transaction trail and the unlocked API output.",
+    icon: <LinkOutlined />,
+  },
+];
 
 async function parseOrThrow<T>(response: Response): Promise<T> {
-  const body = await response.json().catch(() => ({}))
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(body.error ?? 'Request failed.')
+    throw new Error(body.error ?? "Request failed.");
   }
 
-  return body as T
+  return body as T;
 }
 
 function formatJson(value: unknown) {
-  return JSON.stringify(value, null, 2)
+  return JSON.stringify(value, null, 2);
 }
 
 function prettyResult(result: ApiInvocationResult | null) {
   if (!result) {
-    return ''
+    return "";
   }
 
-  if (result.kind === 'proxy') {
+  if (result.kind === "proxy") {
     return formatJson({
       upstreamStatus: result.upstreamStatus,
       upstreamHeaders: result.upstreamHeaders,
-      responseBody: result.responseBody
-    })
+      responseBody: result.responseBody,
+    });
   }
 
-  return formatJson(result)
+  return formatJson(result);
 }
 
-function getUpstreamFailureDetails(
-  result: ApiInvocationResult | null,
-  method?: string
-) {
-  if (!result || result.kind !== 'proxy' || result.upstreamStatus < 400) {
-    return null
+function getUpstreamFailureDetails(result: ApiInvocationResult | null, method?: string) {
+  if (!result || result.kind !== "proxy" || result.upstreamStatus < 400) {
+    return null;
   }
 
-  const routeMethod = method ?? 'POST'
+  const routeMethod = method ?? "POST";
 
   if (
     result.upstreamStatus === 404 &&
-    typeof result.responseBody === 'string' &&
+    typeof result.responseBody === "string" &&
     result.responseBody.includes(`Cannot ${routeMethod} `)
   ) {
     return {
-      title:
-        'Payment succeeded, but the upstream endpoint rejected this HTTP method.',
+      title: "Payment succeeded, but the upstream endpoint rejected this HTTP method.",
       description: `Your paid route is sending ${routeMethod} to the upstream API, and that upstream path does not accept ${routeMethod}. Point the route at the correct upstream path or recreate it with the method the upstream actually supports.`,
-      type: 'warning' as const
-    }
+      type: "warning" as const,
+    };
   }
 
   if (result.upstreamStatus === 404) {
     return {
-      title: 'Payment succeeded, but the upstream endpoint was not found.',
+      title: "Payment succeeded, but the upstream endpoint was not found.",
       description:
-        'The paid route executed, but the upstream URL returned 404. Check the upstream path and base URL.',
-      type: 'warning' as const
-    }
+        "The paid route executed, but the upstream URL returned 404. Check the upstream path and base URL.",
+      type: "warning" as const,
+    };
   }
 
   if (result.upstreamStatus === 405) {
     return {
-      title:
-        'Payment succeeded, but the upstream API does not allow this method.',
+      title: "Payment succeeded, but the upstream API does not allow this method.",
       description: `The upstream returned 405 for ${routeMethod}. Recreate the route with the correct method or point it to the upstream endpoint that accepts ${routeMethod}.`,
-      type: 'warning' as const
-    }
+      type: "warning" as const,
+    };
   }
 
   return {
-    title: 'Payment succeeded, but the upstream API returned an error.',
+    title: "Payment succeeded, but the upstream API returned an error.",
     description: `The gateway paid and invoked the route correctly, but the upstream responded with status ${result.upstreamStatus}.`,
-    type: 'error' as const
+    type: "error" as const,
+  };
+}
+
+function getJourneyStatusTone(state: JourneyStepState) {
+  switch (state) {
+    case "completed":
+      return "success";
+    case "active":
+      return "processing";
+    case "error":
+      return "error";
+    default:
+      return "default";
+  }
+}
+
+function getJourneyStatusLabel(state: JourneyStepState) {
+  switch (state) {
+    case "completed":
+      return "Completed";
+    case "active":
+      return "In progress";
+    case "error":
+      return "Needs attention";
+    default:
+      return "Locked";
   }
 }
 
 export function RouteDemoApp({ slug }: { slug: string }) {
-  const { message } = AntApp.useApp()
-  const [details, setDetails] = useState<RouteContractPayload | null>(null)
-  const [agent, setAgent] = useState<AgentWalletPayload | null>(null)
+  const { message } = AntApp.useApp();
+  const [details, setDetails] = useState<RouteContractPayload | null>(null);
+  const [agent, setAgent] = useState<AgentWalletPayload | null>(null);
   const [requestBodyText, setRequestBodyText] = useState(
-    '{\n  "prompt": "Summarize the billing event"\n}'
-  )
-  const [result, setResult] = useState<ApiInvocationResult | null>(null)
-  const [invocationId, setInvocationId] = useState<string | null>(null)
-  const [paymentReference, setPaymentReference] = useState<string | null>(null)
-  const [paymentExplorerUrl, setPaymentExplorerUrl] = useState<string | null>(
-    null
-  )
-  const [error, setError] = useState<string | null>(null)
-  const [loadingPage, setLoadingPage] = useState(true)
-  const [busyAction, setBusyAction] = useState<'fund' | 'invoke' | null>(null)
+    '{\n  "prompt": "Summarize the billing event"\n}',
+  );
+  const [result, setResult] = useState<ApiInvocationResult | null>(null);
+  const [invocationId, setInvocationId] = useState<string | null>(null);
+  const [paymentReference, setPaymentReference] = useState<string | null>(null);
+  const [paymentExplorerUrl, setPaymentExplorerUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [errorStep, setErrorStep] = useState<JourneyStepId | null>(null);
+  const [loadingPage, setLoadingPage] = useState(true);
+  const [busyAction, setBusyAction] = useState<"fund" | "invoke" | null>(null);
 
-  const isBodylessMethod = BODYLESS_METHODS.has(
-    details?.route.httpMethod ?? 'POST'
-  )
-  const formattedResponse = useMemo(() => prettyResult(result), [result])
+  const isBodylessMethod = BODYLESS_METHODS.has(details?.route.httpMethod ?? "POST");
+  const formattedResponse = useMemo(() => prettyResult(result), [result]);
   const upstreamFailure = useMemo(
     () => getUpstreamFailureDetails(result, details?.route.httpMethod),
-    [details?.route.httpMethod, result]
-  )
-  const agentBalance = Number(agent?.balance.formatted ?? '0')
-  const routePrice = Number(details?.route.priceAmount ?? '0')
-  const canInvoke = Boolean(agent && details && agentBalance >= routePrice)
+    [details?.route.httpMethod, result],
+  );
+  const requestBodyState = useMemo<RequestBodyState>(() => {
+    if (isBodylessMethod) {
+      return {
+        parsed: undefined,
+        error: null,
+        isValid: true,
+      };
+    }
+
+    const trimmed = requestBodyText.trim();
+    if (!trimmed) {
+      return {
+        parsed: undefined,
+        error: null,
+        isValid: true,
+      };
+    }
+
+    try {
+      return {
+        parsed: JSON.parse(trimmed) as Record<string, unknown>,
+        error: null,
+        isValid: true,
+      };
+    } catch {
+      return {
+        parsed: undefined,
+        error: "Request body must be valid JSON.",
+        isValid: false,
+      };
+    }
+  }, [isBodylessMethod, requestBodyText]);
+  const agentBalance = Number(agent?.balance.formatted ?? "0");
+  const routePrice = Number(details?.route.priceAmount ?? "0");
+  const bootComplete = Boolean(details && agent);
+  const fundingComplete = Boolean(
+    agent &&
+      details &&
+      (agentBalance >= routePrice || Boolean(agent.lastFundingTxHash)),
+  );
+  const requestReady = requestBodyState.isValid;
+  const invokeComplete = Boolean(invocationId && paymentReference && result);
+  const canInvoke = Boolean(agent && details && agentBalance >= routePrice && requestReady);
+
+  const activeStepId = useMemo<JourneyStepId>(() => {
+    if (!bootComplete) {
+      return "boot";
+    }
+
+    if (!fundingComplete) {
+      return "fund";
+    }
+
+    if (!requestReady) {
+      return "prepare";
+    }
+
+    if (!invokeComplete) {
+      return "invoke";
+    }
+
+    return "response";
+  }, [bootComplete, fundingComplete, invokeComplete, requestReady]);
+
+  const validationErrorStep = bootComplete && fundingComplete && !requestReady ? "prepare" : null;
+  const effectiveErrorStep = errorStep ?? validationErrorStep;
+  const activeStepIndex = JOURNEY_STEPS.findIndex((step) => step.id === activeStepId);
+  const requestPreview = isBodylessMethod
+    ? `${details?.route.httpMethod ?? "GET"} request. No JSON body is sent.`
+    : requestBodyText.trim() || "{}";
 
   async function copy(value: string, label: string) {
     try {
-      await navigator.clipboard.writeText(value)
-      message.success(`${label} copied.`)
+      await navigator.clipboard.writeText(value);
+      message.success(`${label} copied.`);
     } catch {
-      message.error(`Unable to copy ${label.toLowerCase()}.`)
+      message.error(`Unable to copy ${label.toLowerCase()}.`);
     }
   }
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
 
     void (async () => {
       try {
         const routePayload = await parseOrThrow<RouteContractPayload>(
-          await fetch(`/api/routes/${slug}`, { cache: 'no-store' })
-        )
+          await fetch(`/api/routes/${slug}`, { cache: "no-store" }),
+        );
 
         if (cancelled) {
-          return
+          return;
         }
 
-        setDetails(routePayload)
-        if (!BODYLESS_METHODS.has(routePayload.route.httpMethod ?? 'POST')) {
-          setRequestBodyText(routePayload.examples.sampleBody)
+        setDetails(routePayload);
+        if (!BODYLESS_METHODS.has(routePayload.route.httpMethod ?? "POST")) {
+          setRequestBodyText(routePayload.examples.sampleBody);
         }
 
         const agentPayload = await parseOrThrow<AgentCreateResponse>(
           await fetch(`/api/demo/routes/${slug}/agent`, {
-            method: 'POST'
-          })
-        )
+            method: "POST",
+          }),
+        );
 
         if (!cancelled) {
-          setAgent(agentPayload.agent)
+          setAgent(agentPayload.agent);
+          setError(null);
+          setErrorStep(null);
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'Unable to load the route.'
-          )
+          setError(loadError instanceof Error ? loadError.message : "Unable to load the route.");
+          setErrorStep("boot");
         }
       } finally {
         if (!cancelled) {
-          setLoadingPage(false)
+          setLoadingPage(false);
         }
       }
-    })()
+    })();
 
     return () => {
-      cancelled = true
-    }
-  }, [slug])
-
-  function parseRequestBody() {
-    if (isBodylessMethod) {
-      return undefined
-    }
-
-    const trimmed = requestBodyText.trim()
-    if (!trimmed) {
-      return undefined
-    }
-
-    try {
-      return JSON.parse(trimmed) as Record<string, unknown>
-    } catch {
-      throw new Error('Request body must be valid JSON.')
-    }
-  }
+      cancelled = true;
+    };
+  }, [slug]);
 
   async function fundAgent() {
     if (!agent) {
-      return
+      return;
     }
 
-    setBusyAction('fund')
-    setError(null)
+    setBusyAction("fund");
+    setError(null);
+    setErrorStep(null);
 
     try {
       const payload = await parseOrThrow<AgentFundResponse>(
         await fetch(`/api/demo/routes/${slug}/agent/fund`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            agentId: agent.id
-          })
-        })
-      )
+            agentId: agent.id,
+          }),
+        }),
+      );
 
-      setAgent(payload.agent)
-      message.success(
-        `Agent funded with ${payload.fundedAmount} testnet funds.`
-      )
+      setAgent(payload.agent);
+      message.success(`Agent funded with ${payload.fundedAmount} testnet funds.`);
     } catch (fundError) {
-      setError(
-        fundError instanceof Error
-          ? fundError.message
-          : 'Unable to fund the agent.'
-      )
+      setError(fundError instanceof Error ? fundError.message : "Unable to fund the agent.");
+      setErrorStep("fund");
     } finally {
-      setBusyAction(null)
+      setBusyAction(null);
     }
   }
 
   async function invokeRoute() {
     if (!agent) {
-      return
+      return;
     }
 
-    setBusyAction('invoke')
-    setError(null)
+    if (requestBodyState.error) {
+      setError(requestBodyState.error);
+      setErrorStep("prepare");
+      return;
+    }
+
+    setBusyAction("invoke");
+    setError(null);
+    setErrorStep(null);
 
     try {
       const payload = await parseOrThrow<AgentInvokeResponse>(
         await fetch(`/api/demo/routes/${slug}/agent/invoke`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             agentId: agent.id,
-            requestBody: parseRequestBody()
-          })
-        })
-      )
+            requestBody: requestBodyState.parsed,
+          }),
+        }),
+      );
 
-      setAgent(payload.agent)
-      setInvocationId(payload.invocationId)
-      setPaymentReference(payload.paymentReference)
-      setPaymentExplorerUrl(payload.paymentExplorerUrl ?? null)
-      setResult(payload.result)
-      message.success('Agent paid the endpoint and received the response.')
+      setAgent(payload.agent);
+      setInvocationId(payload.invocationId);
+      setPaymentReference(payload.paymentReference);
+      setPaymentExplorerUrl(payload.paymentExplorerUrl ?? null);
+      setResult(payload.result);
+      message.success("Agent paid the endpoint and received the response.");
     } catch (invokeError) {
-      const message =
-        invokeError instanceof Error
-          ? invokeError.message
-          : 'Unable to call the paid endpoint.'
-      setError(message)
+      const nextError =
+        invokeError instanceof Error ? invokeError.message : "Unable to call the paid endpoint.";
+      setError(nextError);
+      setErrorStep("invoke");
 
-      if (/agent not found/i.test(message)) {
+      if (/agent not found/i.test(nextError)) {
         try {
           const refreshed = await parseOrThrow<AgentCreateResponse>(
             await fetch(`/api/demo/routes/${slug}/agent`, {
-              method: 'POST'
-            })
-          )
-          setAgent(refreshed.agent)
+              method: "POST",
+            }),
+          );
+          setAgent(refreshed.agent);
           setError(
-            'The demo agent was reset by the server. A fresh agent has been created; fund it again and retry.'
-          )
+            "The demo agent was reset by the server. A fresh agent has been created; fund it again and retry.",
+          );
+          setErrorStep("fund");
         } catch {
-          setError(message)
+          setError(nextError);
+          setErrorStep("invoke");
         }
       }
     } finally {
-      setBusyAction(null)
+      setBusyAction(null);
+    }
+  }
+
+  function getStepState(stepId: JourneyStepId): JourneyStepState {
+    const stepIndex = JOURNEY_STEPS.findIndex((step) => step.id === stepId);
+
+    if (effectiveErrorStep === stepId) {
+      return "error";
+    }
+
+    if (stepId === "response" && invokeComplete) {
+      return "completed";
+    }
+
+    if (stepIndex < activeStepIndex) {
+      return "completed";
+    }
+
+    if (stepId === activeStepId) {
+      return "active";
+    }
+
+    return "pending";
+  }
+
+  function renderLockedBody(messageText: string) {
+    return (
+      <div className="journey-card__locked">
+        <LockOutlined />
+        <span>{messageText}</span>
+      </div>
+    );
+  }
+
+  function renderStepBody(stepId: JourneyStepId, stepState: JourneyStepState) {
+    const isLocked = stepState === "pending";
+
+    switch (stepId) {
+      case "boot":
+        if (isLocked) {
+          return renderLockedBody("The route needs to load before the journey can begin.");
+        }
+
+        return (
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <div className="agent-badge">
+              <div className="agent-badge__icon">
+                <RobotOutlined />
+              </div>
+              <div className="agent-badge__body">
+                <div className="agent-badge__label">Agent wallet</div>
+                <div className="agent-badge__value">{agent?.address}</div>
+              </div>
+            </div>
+
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: "endpoint",
+                  label: "Paid endpoint",
+                  children: <span className="inline-code">{details?.gatewayUrl}</span>,
+                },
+                {
+                  key: "network",
+                  label: "Tempo network",
+                  children: `${details?.payment.network} · chain ${details?.payment.chainId}`,
+                },
+                {
+                  key: "price",
+                  label: "Price to pay",
+                  children: `${details?.route.priceAmount} ${details?.route.currency}`,
+                },
+              ]}
+            />
+
+            <div className="card-actions">
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => agent && void copy(agent.address, "Agent wallet")}
+              >
+                Copy agent wallet
+              </Button>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => details && void copy(details.gatewayUrl, "Paid endpoint")}
+              >
+                Copy paid endpoint
+              </Button>
+            </div>
+          </Space>
+        );
+      case "fund":
+        if (isLocked) {
+          return renderLockedBody("Finish booting the demo agent before funding the wallet.");
+        }
+
+        return (
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: "balance",
+                  label: "Current balance",
+                  children: (
+                    <Tag color={agentBalance > 0 ? "success" : "default"}>
+                      {agent?.balance.formatted} {agent?.balance.symbol}
+                    </Tag>
+                  ),
+                },
+                {
+                  key: "threshold",
+                  label: "Funding target",
+                  children: `${AGENT_FUND_AMOUNT} ${agent?.balance.symbol ?? "USDC"}`,
+                },
+                {
+                  key: "funding",
+                  label: "Funding transaction",
+                  children: agent?.lastFundingTxHash ? (
+                    <Space>
+                      <span className="inline-code">{agent.lastFundingTxHash}</span>
+                      <Tag color="success">{formatStatusLabel("funded")}</Tag>
+                    </Space>
+                  ) : (
+                    <Tag color="default">Not funded</Tag>
+                  ),
+                },
+              ]}
+            />
+
+            {stepState === "completed" ? (
+              <Alert
+                type="success"
+                showIcon
+                title="Wallet funded"
+                description="The demo agent has enough balance to move on to the paid request."
+              />
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                title="Fund the wallet before the agent can pay."
+                description={`The agent needs Tempo testnet funds before it can spend ${details?.route.priceAmount} ${details?.route.currency} on the endpoint.`}
+              />
+            )}
+
+            <div className="card-actions">
+              <Button
+                type="primary"
+                icon={<ThunderboltOutlined />}
+                loading={busyAction === "fund"}
+                disabled={busyAction !== null || fundingComplete}
+                onClick={() => void fundAgent()}
+              >
+                Fund agent with {AGENT_FUND_AMOUNT}
+              </Button>
+              {agent?.lastFundingExplorerUrl ? (
+                <Button icon={<LinkOutlined />} href={agent.lastFundingExplorerUrl} target="_blank">
+                  Open funding tx
+                </Button>
+              ) : null}
+            </div>
+          </Space>
+        );
+      case "prepare":
+        if (isLocked) {
+          return renderLockedBody("Fund the wallet first to unlock request preparation.");
+        }
+
+        return (
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            {isBodylessMethod ? (
+              <Alert
+                type="info"
+                showIcon
+                title={`${details?.route.httpMethod} requests do not send a request body.`}
+                description="This step is automatically ready because the upstream route is bodyless."
+              />
+            ) : (
+              <div>
+                <div className="muted" style={{ marginBottom: 8 }}>
+                  JSON request body
+                </div>
+                <Input.TextArea
+                  rows={stepState === "completed" ? 6 : 12}
+                  value={requestBodyText}
+                  onChange={(event) => {
+                    setRequestBodyText(event.target.value);
+                    if (errorStep === "prepare") {
+                      setError(null);
+                      setErrorStep(null);
+                    }
+                  }}
+                  spellCheck={false}
+                />
+              </div>
+            )}
+
+            {requestBodyState.error ? (
+              <Alert type="error" showIcon title={requestBodyState.error} />
+            ) : (
+              <Alert
+                type="success"
+                showIcon
+                title="Payload is valid"
+                description="The request body is ready for the paid invocation step."
+              />
+            )}
+
+            <div className="card-actions">
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => details && void copy(details.examples.sampleBody, "Sample request body")}
+                disabled={isBodylessMethod}
+              >
+                Copy sample body
+              </Button>
+            </div>
+          </Space>
+        );
+      case "invoke":
+        if (isLocked) {
+          return renderLockedBody("Prepare a valid request before the agent can pay and invoke.");
+        }
+
+        return (
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            {!isBodylessMethod ? (
+              <div className="journey-preview">
+                <div className="journey-preview__label">Final request payload</div>
+                <pre className="code-block">{requestPreview}</pre>
+              </div>
+            ) : null}
+
+            {!canInvoke ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="The agent still needs enough balance to pay."
+                description={`Fund the wallet until it can cover ${details?.route.priceAmount} ${details?.route.currency}, then trigger the paid request.`}
+              />
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                title="Ready to trigger the paid invocation."
+                description="This action spends testnet funds, satisfies the MPP challenge, and calls the upstream API."
+              />
+            )}
+
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: "price",
+                  label: "Charge",
+                  children: `${details?.route.priceAmount} ${details?.route.currency}`,
+                },
+                {
+                  key: "method",
+                  label: "HTTP method",
+                  children: details?.route.httpMethod ?? "POST",
+                },
+                {
+                  key: "mppx",
+                  label: "MPP example",
+                  children: <span className="inline-code">{details?.examples.mppx}</span>,
+                },
+              ]}
+            />
+
+            <div className="card-actions">
+              <Button
+                type="primary"
+                size="large"
+                icon={<RobotOutlined />}
+                loading={busyAction === "invoke"}
+                disabled={!canInvoke || busyAction !== null}
+                onClick={() => void invokeRoute()}
+              >
+                Pay endpoint and call API
+              </Button>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => details && void copy(details.examples.mppx, "mppx example")}
+              >
+                Copy mppx example
+              </Button>
+            </div>
+
+            {stepState === "completed" && paymentReference ? (
+              <Alert
+                type="success"
+                showIcon
+                title="Paid request sent"
+                description={`Payment reference: ${paymentReference}`}
+              />
+            ) : null}
+          </Space>
+        );
+      case "response":
+        if (isLocked) {
+          return renderLockedBody("The response stays locked until the paid request completes.");
+        }
+
+        return (
+          <Space orientation="vertical" size={18} style={{ width: "100%" }}>
+            <Descriptions
+              column={1}
+              items={[
+                {
+                  key: "payment",
+                  label: "Payment reference",
+                  children: paymentReference ? (
+                    <Space>
+                      <span className="inline-code">{paymentReference}</span>
+                      <Tag color={getStatusColor("paid")}>{formatStatusLabel("paid")}</Tag>
+                    </Space>
+                  ) : (
+                    <Tag color="default">No payment yet</Tag>
+                  ),
+                },
+                {
+                  key: "invocation",
+                  label: "Invocation",
+                  children: invocationId ? (
+                    <span className="inline-code">{invocationId}</span>
+                  ) : (
+                    "Not called yet"
+                  ),
+                },
+              ]}
+            />
+
+            {result ? (
+              <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+                <Alert
+                  type={upstreamFailure?.type ?? "success"}
+                  showIcon
+                  title={
+                    upstreamFailure?.title ??
+                    "Agent payment succeeded and the endpoint response is unlocked."
+                  }
+                  description={
+                    upstreamFailure?.description ??
+                    (paymentReference
+                      ? `Payment reference: ${paymentReference}`
+                      : "The paid request completed successfully.")
+                  }
+                />
+
+                <div className="card-actions">
+                  {agent?.lastFundingExplorerUrl ? (
+                    <Button icon={<LinkOutlined />} href={agent.lastFundingExplorerUrl} target="_blank">
+                      Open funding tx
+                    </Button>
+                  ) : null}
+                  {paymentExplorerUrl ? (
+                    <Button icon={<LinkOutlined />} href={paymentExplorerUrl} target="_blank">
+                      Open payment tx
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="response-shell">
+                  <pre className="code-block">{formattedResponse}</pre>
+                </div>
+              </Space>
+            ) : (
+              <Result
+                status="info"
+                title="Response is still locked"
+                subTitle="Complete the paid invocation step to reveal the API output here."
+              />
+            )}
+          </Space>
+        );
     }
   }
 
   if (loadingPage) {
     return (
       <AppShell current="demo">
-        <Result
-          icon={<Spin size="large" />}
-          title="Booting the live Tempo agent flow..."
-        />
+        <Result icon={<Spin size="large" />} title="Booting the live Tempo agent flow..." />
       </AppShell>
-    )
+    );
   }
 
   if (!details || !agent) {
     return (
       <AppShell current="demo">
-        <Result status="error" title={error ?? 'Route not found.'} />
+        <Result status="error" title={error ?? "Route not found."} />
       </AppShell>
-    )
+    );
   }
 
   return (
@@ -378,106 +881,55 @@ export function RouteDemoApp({ slug }: { slug: string }) {
     >
       <div className="page-stack">
         <section className="hero-surface">
-          <div style={{ padding: 32 }} className="hero-grid">
-            <div className="page-stack demo-hero-stack">
-              <div className="section-heading">
-                <h1 className="section-title">
-                  Fund the agent, then let it pay and call the API.
-                </h1>
-              </div>
+          <div style={{ padding: 32 }} className="page-stack">
+            <div className="section-heading">
+              <span className="section-kicker">Page 2 of 2</span>
+              <h1 className="section-title">Watch the paid API journey unfold step by step.</h1>
+              <p className="section-copy">
+                This live demo boots a dedicated Tempo testnet wallet, funds it with `{AGENT_FUND_AMOUNT}`,
+                pays the endpoint, and reveals the final API response only after the payment succeeds.
+              </p>
+            </div>
 
-              <div className="demo-hero-row">
-                <Card className="section-surface demo-agent-card">
-                  <Space
-                    orientation="vertical"
-                    size={18}
-                    style={{ width: '100%' }}
+            <div className="journey-rail" aria-label="Demo journey">
+              {JOURNEY_STEPS.map((step) => {
+                const stepState = getStepState(step.id);
+
+                return (
+                  <div
+                    key={step.id}
+                    className={`journey-rail__step journey-rail__step--${stepState}`}
                   >
-                    {/* <Tag color="blue" icon={<RobotOutlined />}> */}
-                    {/* Dedicated demo agent */}
-                    {/* </Tag> */}
-
-                    <div className="agent-badge">
-                      <div className="agent-badge__icon">
-                        <RobotOutlined />
-                      </div>
-                      <div className="agent-badge__body">
-                        <div className="agent-badge__label">Agent wallet</div>
-                        <div className="agent-badge__value">
-                          {agent.address}
-                        </div>
+                    <div className="journey-rail__icon">{step.icon}</div>
+                    <div className="journey-rail__body">
+                      <div className="journey-step__eyebrow">{step.label}</div>
+                      <div className="journey-step__title">{step.title}</div>
+                      <div className="journey-rail__status">
+                        <Tag color={getJourneyStatusTone(stepState)}>
+                          {getJourneyStatusLabel(stepState)}
+                        </Tag>
                       </div>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
 
-                    <Descriptions
-                      column={1}
-                      items={[
-                        {
-                          key: 'gateway',
-                          label: 'Paid endpoint',
-                          children: (
-                            <span className="inline-code">
-                              {details.gatewayUrl}
-                            </span>
-                          )
-                        },
-                        {
-                          key: 'network',
-                          label: 'Tempo network',
-                          children: `${details.payment.network} · chain ${details.payment.chainId}`
-                        },
-                        {
-                          key: 'balance',
-                          label: 'Current balance',
-                          children: (
-                            <Tag
-                              color={agentBalance > 0 ? 'success' : 'default'}
-                            >
-                              {agent.balance.formatted} USD
-                            </Tag>
-                          )
-                        }
-                      ]}
-                    />
-
-                    <div className="card-actions">
-                      <Button
-                        type="primary"
-                        icon={<ThunderboltOutlined />}
-                        loading={busyAction === 'fund'}
-                        disabled={
-                          busyAction !== null ||
-                          agentBalance >= Number(AGENT_FUND_AMOUNT)
-                        }
-                        onClick={() => void fundAgent()}
-                      >
-                        Fund agent with {AGENT_FUND_AMOUNT}
-                      </Button>
-                      <Button
-                        icon={<CopyOutlined />}
-                        onClick={() => void copy(agent.address, 'Agent wallet')}
-                      >
-                        Copy agent wallet
-                      </Button>
-                    </div>
-                  </Space>
-                </Card>
-
-                <div className="metric-grid demo-metric-grid">
-                  <Card>
-                    <Statistic
-                      title="Agent balance"
-                      value={`${agent.balance.formatted} USD`}
-                      prefix={<RobotOutlined />}
-                    />
-                  </Card>
-                  <Card>
-                    <Statistic
-                      title="Price to pay / API"
-                      value={`${details.route.priceAmount} USD`}
-                      prefix={<WalletOutlined />}
-                    />
-                  </Card>
+            <div className="journey-metrics">
+              <div className="journey-metric">
+                <div className="journey-metric__label">Endpoint</div>
+                <div className="journey-metric__value">{details.route.routeName}</div>
+              </div>
+              <div className="journey-metric">
+                <div className="journey-metric__label">Agent balance</div>
+                <div className="journey-metric__value">
+                  {agent.balance.formatted} {agent.balance.symbol}
+                </div>
+              </div>
+              <div className="journey-metric">
+                <div className="journey-metric__label">Price to pay</div>
+                <div className="journey-metric__value">
+                  {details.route.priceAmount} {details.route.currency}
                 </div>
               </div>
             </div>
@@ -486,205 +938,46 @@ export function RouteDemoApp({ slug }: { slug: string }) {
 
         {error ? <Alert type="error" title={error} showIcon /> : null}
 
-        <div className="content-grid">
-          <Card className="section-surface">
-            <Space orientation="vertical" size={18} style={{ width: '100%' }}>
-              <div className="section-heading">
-                <span className="section-kicker">Agent request</span>
-                <h2 style={{ margin: 0 }}>Prepare the API input</h2>
-                <p className="section-copy">
-                  The agent will send this payload to the paid endpoint after
-                  its wallet has enough Tempo testnet funds.
-                </p>
-              </div>
+        <div className="journey-stack">
+          {JOURNEY_STEPS.map((step) => {
+            const stepState = getStepState(step.id);
+            const showExpandedBody = stepState === "active" || stepState === "error";
+            const showCompactBody = stepState === "completed";
 
-              {isBodylessMethod ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  title={`${details.route.httpMethod} requests do not send a request body.`}
-                />
-              ) : (
-                <div>
-                  <div className="muted" style={{ marginBottom: 8 }}>
-                    JSON request body
+            return (
+              <Card
+                key={step.id}
+                className={`section-surface journey-card journey-card--${stepState}`}
+              >
+                <div className="journey-card__header">
+                  <div className="journey-card__badge">{step.icon}</div>
+                  <div className="journey-card__heading">
+                    <div className="journey-step__eyebrow">{step.label}</div>
+                    <h2 className="journey-card__title">{step.title}</h2>
+                    <p className="journey-card__copy">{step.description}</p>
                   </div>
-                  <Input.TextArea
-                    rows={12}
-                    value={requestBodyText}
-                    onChange={event => setRequestBodyText(event.target.value)}
-                    spellCheck={false}
-                  />
+                  <div className="journey-card__status">
+                    {stepState === "completed" ? <CheckCircleFilled /> : step.icon}
+                    <span>{getJourneyStatusLabel(stepState)}</span>
+                  </div>
                 </div>
-              )}
 
-              <div className="card-actions">
-                <Button
-                  type="primary"
-                  size="large"
-                  icon={<RobotOutlined />}
-                  loading={busyAction === 'invoke'}
-                  disabled={!canInvoke || busyAction !== null}
-                  onClick={() => void invokeRoute()}
-                >
-                  Pay endpoint and call API
-                </Button>
-                <Button
-                  icon={<CopyOutlined />}
-                  onClick={() =>
-                    void copy(
-                      details.examples.sampleBody,
-                      'Sample request body'
-                    )
-                  }
-                  disabled={isBodylessMethod}
-                >
-                  Copy sample body
-                </Button>
-              </div>
-
-              {!canInvoke ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  title="The agent needs funding first."
-                  description={`Fund the agent with ${AGENT_FUND_AMOUNT} on Tempo testnet before it can pay ${details.route.priceAmount} ${details.route.currency}.`}
-                />
-              ) : null}
-            </Space>
-          </Card>
-
-          <Card className="section-surface">
-            <Space orientation="vertical" size={18} style={{ width: '100%' }}>
-              <div className="section-heading">
-                <span className="section-kicker">Onchain proof</span>
-                <h2 style={{ margin: 0 }}>Funding and payment state</h2>
-                <p className="section-copy">
-                  Both buttons on this page trigger real Tempo testnet activity:
-                  first a token transfer into the agent wallet, then a paid API
-                  call against the endpoint.
-                </p>
-              </div>
-
-              <Descriptions
-                column={1}
-                items={[
-                  {
-                    key: 'funding',
-                    label: 'Funding transaction',
-                    children: agent.lastFundingTxHash ? (
-                      <Space>
-                        <span className="inline-code">
-                          {agent.lastFundingTxHash}
-                        </span>
-                        <Tag color="success">{formatStatusLabel('funded')}</Tag>
-                      </Space>
-                    ) : (
-                      <Tag color="default">Not funded</Tag>
-                    )
-                  },
-                  {
-                    key: 'payment',
-                    label: 'Payment reference',
-                    children: paymentReference ? (
-                      <Space>
-                        <span className="inline-code">{paymentReference}</span>
-                        <Tag color={getStatusColor('paid')}>
-                          {formatStatusLabel('paid')}
-                        </Tag>
-                      </Space>
-                    ) : (
-                      <Tag color="default">No payment yet</Tag>
-                    )
-                  },
-                  {
-                    key: 'invocation',
-                    label: 'Invocation',
-                    children: invocationId ? (
-                      <span className="inline-code">{invocationId}</span>
-                    ) : (
-                      'Not called yet'
-                    )
-                  }
-                ]}
-              />
-
-              <div className="card-actions">
-                {agent.lastFundingExplorerUrl ? (
-                  <Button
-                    icon={<LinkOutlined />}
-                    href={agent.lastFundingExplorerUrl}
-                    target="_blank"
+                {showExpandedBody || showCompactBody ? (
+                  <div
+                    className={`journey-card__body ${
+                      showCompactBody ? "journey-card__body--compact" : ""
+                    }`}
                   >
-                    Open funding tx
-                  </Button>
-                ) : null}
-                {paymentExplorerUrl ? (
-                  <Button
-                    icon={<LinkOutlined />}
-                    href={paymentExplorerUrl}
-                    target="_blank"
-                  >
-                    Open payment tx
-                  </Button>
-                ) : null}
-                <Button
-                  icon={<CopyOutlined />}
-                  onClick={() =>
-                    void copy(details.examples.mppx, 'mppx example')
-                  }
-                >
-                  Copy mppx example
-                </Button>
-              </div>
-            </Space>
-          </Card>
+                    {renderStepBody(step.id, stepState)}
+                  </div>
+                ) : (
+                  <div className="journey-card__body">{renderLockedBody(step.description)}</div>
+                )}
+              </Card>
+            );
+          })}
         </div>
-
-        <Card className="section-surface">
-          <Space orientation="vertical" size={18} style={{ width: '100%' }}>
-            <div className="section-heading">
-              <span className="section-kicker">Unlocked response</span>
-              <h2 style={{ margin: 0 }}>Final API output</h2>
-            </div>
-
-            {result ? (
-              <Space orientation="vertical" size={16} style={{ width: '100%' }}>
-                <Alert
-                  type={upstreamFailure?.type ?? 'success'}
-                  showIcon
-                  title={
-                    upstreamFailure?.title ??
-                    'Agent payment succeeded and the endpoint response is unlocked.'
-                  }
-                  description={
-                    upstreamFailure?.description ??
-                    (paymentReference
-                      ? `Payment reference: ${paymentReference}`
-                      : 'The paid request completed successfully.')
-                  }
-                />
-
-                {paymentReference ? (
-                  <div className="muted">
-                    Payment reference: {paymentReference}
-                  </div>
-                ) : null}
-
-                <div className="response-shell">
-                  <pre className="code-block">{formattedResponse}</pre>
-                </div>
-              </Space>
-            ) : (
-              <Result
-                status="info"
-                title="Response is still locked"
-                subTitle="Fund the agent and let it call the endpoint to reveal the final API response here."
-              />
-            )}
-          </Space>
-        </Card>
       </div>
     </AppShell>
-  )
+  );
 }
