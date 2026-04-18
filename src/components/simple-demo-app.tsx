@@ -247,11 +247,8 @@ export function SimpleDemoApp() {
                         setForm(current => ({ ...current, httpMethod: value }))
                       }
                       options={[
-                        { label: 'POST', value: 'POST' },
-                        { label: 'GET', value: 'GET' },
-                        { label: 'PUT', value: 'PUT' },
-                        { label: 'PATCH', value: 'PATCH' },
-                        { label: 'DELETE', value: 'DELETE' }
+                        { label: "POST", value: "POST" },
+                        { label: "GET", value: "GET" },
                       ]}
                     />
                   </div>
