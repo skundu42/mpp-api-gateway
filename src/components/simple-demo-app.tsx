@@ -18,8 +18,6 @@ import {
   Result,
   Select,
   Space,
-  Statistic,
-  Tag,
 } from "antd";
 import { useMemo, useState } from "react";
 
@@ -116,11 +114,10 @@ export function SimpleDemoApp() {
       <div className="page-stack">
         <section className="hero-surface">
           <div style={{ padding: 32 }} className="hero-grid">
-            <div className="page-stack">
+            <div className="page-stack" style={{ gridColumn: "1 / -1" }}>
               <div className="section-heading">
-                <span className="section-kicker">Page 1 of 2</span>
                 <h1 className="section-title">
-                  Create a paid API endpoint in one step.
+                  Turbcharge your paid APIs with Agentic On-chain Payments
                 </h1>
                 <p className="section-copy">
                   This page only does one job: generate a monetized endpoint. The next
@@ -128,29 +125,55 @@ export function SimpleDemoApp() {
                 </p>
               </div>
 
-              <div className="metric-grid">
-                <Card>
-                  <Statistic title="Flow" value="2 pages" prefix={<ApiOutlined />} />
-                </Card>
-                <Card>
-                  <Statistic title="Price per call" value="0.02 USDC" prefix={<WalletOutlined />} />
-                </Card>
-                <Card>
-                  <Statistic title="Setup" value="No auth" prefix={<ThunderboltOutlined />} />
-                </Card>
+              <div className="journey-flow" aria-label="Transaction journey">
+                <div className="journey-step">
+                  <div className="journey-step__icon">
+                    <LinkOutlined />
+                  </div>
+                  <div className="journey-step__body">
+                    <div className="journey-step__eyebrow">Step 1</div>
+                    <div className="journey-step__title">Generate payment URL</div>
+                    <p className="journey-step__copy">
+                      Create a payment URL that allows an on-chain payment to be made.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="journey-arrow" aria-hidden="true">
+                  <ArrowRightOutlined />
+                </div>
+
+                <div className="journey-step">
+                  <div className="journey-step__icon">
+                    <WalletOutlined />
+                  </div>
+                  <div className="journey-step__body">
+                    <div className="journey-step__eyebrow">Step 2</div>
+                    <div className="journey-step__title">Confirm transaction</div>
+                    <p className="journey-step__copy">
+                      Wait for the crypto transaction to be confirmed on-chain.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="journey-arrow" aria-hidden="true">
+                  <ArrowRightOutlined />
+                </div>
+
+                <div className="journey-step">
+                  <div className="journey-step__icon">
+                    <ApiOutlined />
+                  </div>
+                  <div className="journey-step__body">
+                    <div className="journey-step__eyebrow">Step 3</div>
+                    <div className="journey-step__title">Serve paywalled data</div>
+                    <p className="journey-step__copy">
+                      The agent receives the pay-walled data immediately after verification.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <Card className="section-surface">
-              <Space orientation="vertical" size={18} style={{ width: "100%" }}>
-                <Tag color="blue">Simplified seller flow</Tag>
-                <ul className="bullet-list">
-                  <li>Create a paid proxy for any public API URL.</li>
-                  <li>Or leave the URL empty and use the built-in demo upstream.</li>
-                  <li>Open the second page to run a paid request end to end.</li>
-                </ul>
-              </Space>
-            </Card>
           </div>
         </section>
 
