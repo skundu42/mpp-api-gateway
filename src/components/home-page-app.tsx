@@ -63,7 +63,7 @@ export function HomePageApp({
                 </div>
               </div>
 
-              <Card bordered={false} className="section-surface">
+              <Card variant="borderless" className="section-surface">
                 <Space orientation="vertical" size={20} style={{ width: "100%" }}>
                   <Tag color="blue">Dual audience homepage</Tag>
                   <div>
@@ -142,12 +142,12 @@ export function HomePageApp({
           <Card className="section-surface">
             <Row gutter={[16, 16]}>
               <Col xs={24} sm={12}>
-                <Card size="small" bordered={false}>
+                <Card size="small" variant="borderless">
                   <Statistic title="Trust" value="Proof on Tempo" prefix={<SafetyCertificateOutlined />} />
                 </Card>
               </Col>
               <Col xs={24} sm={12}>
-                <Card size="small" bordered={false}>
+                <Card size="small" variant="borderless">
                   <Statistic title="Speed" value="< 10 sec target" prefix={<ThunderboltOutlined />} />
                 </Card>
               </Col>

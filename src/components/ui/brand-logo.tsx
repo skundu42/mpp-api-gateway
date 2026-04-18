@@ -8,7 +8,7 @@ export function BrandLogo() {
       </span>
       <span className="app-brand__text">
         <span className="app-brand__name">AgentPaywall</span>
-        <span className="app-brand__tag">Paid API gateway</span>
+        <span className="app-brand__tag">Agentic API gateway</span>
       </span>
     </span>
   );

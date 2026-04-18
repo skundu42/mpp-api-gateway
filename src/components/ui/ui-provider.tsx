@@ -17,8 +17,8 @@ const theme = {
     colorBorderSecondary: "#e6ebf2",
     borderRadius: 18,
     borderRadiusLG: 24,
-    fontFamily: "var(--font-display), sans-serif",
-    fontFamilyCode: "var(--font-mono), monospace",
+    fontFamily: "var(--font-geist-sans), sans-serif",
+    fontFamilyCode: "var(--font-geist-mono), monospace",
     boxShadowSecondary: "0 20px 45px rgba(15, 23, 42, 0.08)",
   },
   components: {

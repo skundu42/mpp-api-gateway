@@ -5,8 +5,8 @@
   <path d="M40 104V68C40 50.327 54.327 36 72 36C89.673 36 104 50.327 104 68V104" stroke="white" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M44 92H58L67 75L76 102L85 82H100" stroke="#A7D8FF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
   <circle cx="103" cy="84" r="7" fill="white"/>
-  <text x="170" y="74" fill="#0F172A" font-family="Space Grotesk, Inter, Arial, sans-serif" font-size="44" font-weight="700" letter-spacing="-1.5">AgentPaywall</text>
-  <text x="170" y="112" fill="#4B5563" font-family="IBM Plex Mono, Menlo, monospace" font-size="18" font-weight="500" letter-spacing="1.8">PAID API GATEWAY FOR TEMPO + MPP FLOWS</text>
+  <text x="170" y="74" fill="#0F172A" font-family="Geist Sans, Inter, Arial, sans-serif" font-size="44" font-weight="700" letter-spacing="-1.5">AgentPaywall</text>
+  <text x="170" y="112" fill="#4B5563" font-family="Geist Mono, Menlo, monospace" font-size="18" font-weight="500" letter-spacing="1.8">PAID API GATEWAY FOR TEMPO + MPP FLOWS</text>
   <defs>
     <linearGradient id="bg" x1="19" y1="22" x2="124" y2="140" gradientUnits="userSpaceOnUse">
       <stop stop-color="#1848E4"/>

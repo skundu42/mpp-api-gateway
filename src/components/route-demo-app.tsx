@@ -23,10 +23,10 @@ import {
   Spin,
   Tag,
 } from "antd";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import { AppShell } from "@/components/ui/app-shell";
-import { formatStatusLabel, getStatusColor } from "@/lib/ui";
+import { formatStatusLabel, formatUsdAmount, getStatusColor } from "@/lib/ui";
 import type { ApiInvocationResult, PublicApiRoute } from "@/lib/types";
 
 const BODYLESS_METHODS = new Set(["GET"]);
@@ -237,6 +237,27 @@ function getJourneyStatusLabel(state: JourneyStepState) {
   }
 }
 
+function getRouteKindLabel(routeKind: PublicApiRoute["routeKind"]) {
+  switch (routeKind) {
+    case "external_proxy":
+      return "External proxy";
+    case "internal_demo":
+      return "Internal demo";
+  }
+}
+
+function shortenValue(value?: string | null, leading = 10, trailing = 6) {
+  if (!value) {
+    return "Not available";
+  }
+
+  if (value.length <= leading + trailing + 3) {
+    return value;
+  }
+
+  return `${value.slice(0, leading)}...${value.slice(-trailing)}`;
+}
+
 export function RouteDemoApp({ slug }: { slug: string }) {
   const { message } = AntApp.useApp();
   const [details, setDetails] = useState<RouteContractPayload | null>(null);
@@ -406,7 +427,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
       );
 
       setAgent(payload.agent);
-      message.success(`Agent funded with ${payload.fundedAmount} testnet funds.`);
+      message.success(`Agent funded with ${formatUsdAmount(payload.fundedAmount)}.`);
     } catch (fundError) {
       setError(fundError instanceof Error ? fundError.message : "Unable to fund the agent.");
       setErrorStep("fund");
@@ -580,14 +601,14 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                   label: "Current balance",
                   children: (
                     <Tag color={agentBalance > 0 ? "success" : "default"}>
-                      {agent?.balance.formatted} {agent?.balance.symbol}
+                      {formatUsdAmount(agent?.balance.formatted ?? 0)}
                     </Tag>
                   ),
                 },
                 {
                   key: "threshold",
                   label: "Funding target",
-                  children: `${AGENT_FUND_AMOUNT} ${agent?.balance.symbol ?? "USDC"}`,
+                  children: formatUsdAmount(AGENT_FUND_AMOUNT),
                 },
                 {
                   key: "funding",
@@ -628,10 +649,15 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 disabled={busyAction !== null || fundingComplete}
                 onClick={() => void fundAgent()}
               >
-                Fund agent with {AGENT_FUND_AMOUNT}
+                Fund agent with {formatUsdAmount(AGENT_FUND_AMOUNT)}
               </Button>
               {agent?.lastFundingExplorerUrl ? (
-                <Button icon={<LinkOutlined />} href={agent.lastFundingExplorerUrl} target="_blank">
+                <Button
+                  icon={<LinkOutlined />}
+                  href={agent.lastFundingExplorerUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   Open funding tx
                 </Button>
               ) : null}
@@ -645,14 +671,7 @@ export function RouteDemoApp({ slug }: { slug: string }) {
 
         return (
           <Space orientation="vertical" size={18} style={{ width: "100%" }}>
-            {isBodylessMethod ? (
-              <Alert
-                type="info"
-                showIcon
-                title={`${details?.route.httpMethod} requests do not send a request body.`}
-                description="This step is automatically ready because the upstream route is bodyless."
-              />
-            ) : (
+            {isBodylessMethod ? null : (
               <div>
                 <div className="muted" style={{ marginBottom: 8 }}>
                   JSON request body
@@ -678,20 +697,27 @@ export function RouteDemoApp({ slug }: { slug: string }) {
               <Alert
                 type="success"
                 showIcon
-                title="Payload is valid"
-                description="The request body is ready for the paid invocation step."
+                title={isBodylessMethod ? "Request is ready" : "Payload is valid"}
+                description={
+                  isBodylessMethod
+                    ? "This route can move straight to the paid invocation step."
+                    : "The request body is ready for the paid invocation step."
+                }
               />
             )}
 
-            <div className="card-actions">
-              <Button
-                icon={<CopyOutlined />}
-                onClick={() => details && void copy(details.examples.sampleBody, "Sample request body")}
-                disabled={isBodylessMethod}
-              >
-                Copy sample body
-              </Button>
-            </div>
+            {!isBodylessMethod ? (
+              <div className="card-actions">
+                <Button
+                  icon={<CopyOutlined />}
+                  onClick={() =>
+                    details && void copy(details.examples.sampleBody, "Sample request body")
+                  }
+                >
+                  Copy sample body
+                </Button>
+              </div>
+            ) : null}
           </Space>
         );
       case "invoke":
@@ -755,12 +781,6 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 onClick={() => void invokeRoute()}
               >
                 Pay endpoint and call API
-              </Button>
-              <Button
-                icon={<CopyOutlined />}
-                onClick={() => details && void copy(details.examples.mppx, "mppx example")}
-              >
-                Copy mppx example
               </Button>
             </div>
 
@@ -827,12 +847,22 @@ export function RouteDemoApp({ slug }: { slug: string }) {
 
                 <div className="card-actions">
                   {agent?.lastFundingExplorerUrl ? (
-                    <Button icon={<LinkOutlined />} href={agent.lastFundingExplorerUrl} target="_blank">
+                    <Button
+                      icon={<LinkOutlined />}
+                      href={agent.lastFundingExplorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       Open funding tx
                     </Button>
                   ) : null}
                   {paymentExplorerUrl ? (
-                    <Button icon={<LinkOutlined />} href={paymentExplorerUrl} target="_blank">
+                    <Button
+                      icon={<LinkOutlined />}
+                      href={paymentExplorerUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       Open payment tx
                     </Button>
                   ) : null}
@@ -870,35 +900,103 @@ export function RouteDemoApp({ slug }: { slug: string }) {
     );
   }
 
+  const routeKindLabel = getRouteKindLabel(details.route.routeKind);
+  const completedStepCount = JOURNEY_STEPS.filter(
+    (step) => getStepState(step.id) === "completed",
+  ).length;
+  const progressPercent = Math.round((completedStepCount / JOURNEY_STEPS.length) * 100);
+  const stageTone = effectiveErrorStep
+    ? "error"
+    : invokeComplete
+      ? upstreamFailure
+        ? "warning"
+        : "complete"
+      : busyAction === "invoke"
+        ? "execute"
+        : busyAction === "fund"
+          ? "fund"
+          : "standby";
+  const stageTitle = effectiveErrorStep
+    ? "Run paused for operator input"
+    : invokeComplete
+      ? upstreamFailure
+        ? "Payment cleared, upstream needs attention"
+        : "Premium response unlocked"
+      : busyAction === "invoke"
+        ? "Agent is clearing the payment challenge"
+        : busyAction === "fund"
+          ? "Funding wallet on Tempo testnet"
+          : activeStepId === "prepare"
+            ? "Payload is validated and ready"
+            : activeStepId === "fund"
+              ? "Agent is waiting for just-in-time capital"
+              : "Provisioned wallet is standing by";
+  const stageCopy = effectiveErrorStep
+    ? error ?? "The live run needs attention before it can continue."
+    : invokeComplete
+      ? upstreamFailure?.description ??
+        "The agent satisfied the MPP challenge, retried the call, and revealed the paid response."
+      : busyAction === "invoke"
+        ? "The wallet is spending testnet funds, satisfying the gateway challenge, and invoking the protected route."
+        : busyAction === "fund"
+          ? `The demo wallet is receiving ${formatUsdAmount(AGENT_FUND_AMOUNT)} so it can pay the route on demand.`
+          : activeStepId === "prepare"
+            ? "The contract is loaded, the wallet is funded, and the request body is ready for the paid invocation."
+            : activeStepId === "fund"
+              ? "This flow shows just-in-time wallet funding before the agent spends against the gateway contract."
+              : "Each run provisions a dedicated wallet, fetches the contract, and keeps the premium response locked until payment succeeds.";
+  const proofStatusLabel = paymentReference
+    ? "Payment proof captured"
+    : busyAction === "invoke"
+      ? "Awaiting settlement"
+      : "No proof yet";
+
   return (
     <AppShell
       current="demo"
       headerExtra={
         <Button href="/" icon={<ArrowLeftOutlined />}>
-          Create another endpoint
+          Create another paid endpoint
         </Button>
       }
     >
       <div className="page-stack">
-        <section className="hero-surface">
-          <div className="page-stack surface-pad">
-            <div className="section-heading">
-              <span className="section-kicker">Page 2 of 2</span>
-              <h1 className="section-title">Watch the paid API journey unfold step by step.</h1>
-              <p className="section-copy">
-                This live demo boots a dedicated Tempo testnet wallet, funds it with `{AGENT_FUND_AMOUNT}`,
-                pays the endpoint, and reveals the final API response only after the payment succeeds.
-              </p>
+        <section className="hero-surface demo-command-surface">
+          <div className="page-stack surface-pad demo-command-stack">
+            <div className="page-stack demo-command-copy">
+              <div className="section-heading demo-fade-up">
+                <span className="section-kicker">Agentic capability walkthrough</span>
+                <h1 className="section-title">
+                  Watch an agent budget, pay, and unlock a premium API in one run.
+                </h1>
+                <p className="section-copy">
+                  This live flow provisions a dedicated Tempo testnet wallet, loads the paid route
+                  contract, funds the agent just in time, satisfies the MPP challenge, and reveals
+                  the final response only after settlement succeeds.
+                </p>
+              </div>
+
+              <div className="demo-command-pills demo-fade-up">
+                <Tag color="blue">{routeKindLabel}</Tag>
+                <Tag color="cyan">{details.route.httpMethod ?? "POST"} route</Tag>
+                <Tag color="gold">Tempo testnet</Tag>
+                <Tag color="geekblue">MPP-protected gateway</Tag>
+              </div>
+
+              {details.route.description ? (
+                <div className="demo-command-note demo-fade-up">{details.route.description}</div>
+              ) : null}
             </div>
 
             <div className="journey-rail" aria-label="Demo journey">
-              {JOURNEY_STEPS.map((step) => {
+              {JOURNEY_STEPS.map((step, index) => {
                 const stepState = getStepState(step.id);
 
                 return (
                   <div
                     key={step.id}
                     className={`journey-rail__step journey-rail__step--${stepState}`}
+                    style={{ "--step-index": index } as CSSProperties}
                   >
                     <div className="journey-rail__icon">{step.icon}</div>
                     <div className="journey-rail__body">
@@ -921,9 +1019,13 @@ export function RouteDemoApp({ slug }: { slug: string }) {
                 <div className="journey-metric__value">{details.route.routeName}</div>
               </div>
               <div className="journey-metric">
+                <div className="journey-metric__label">Gateway slug</div>
+                <div className="journey-metric__value">{details.route.slug}</div>
+              </div>
+              <div className="journey-metric">
                 <div className="journey-metric__label">Agent balance</div>
                 <div className="journey-metric__value">
-                  {agent.balance.formatted} {agent.balance.symbol}
+                  {formatUsdAmount(agent.balance.formatted)}
                 </div>
               </div>
               <div className="journey-metric">
@@ -938,44 +1040,127 @@ export function RouteDemoApp({ slug }: { slug: string }) {
 
         {error ? <Alert type="error" title={error} showIcon /> : null}
 
-        <div className="journey-stack">
-          {JOURNEY_STEPS.map((step) => {
-            const stepState = getStepState(step.id);
-            const showExpandedBody = stepState === "active" || stepState === "error";
-            const showCompactBody = stepState === "completed";
-
-            return (
-              <Card
-                key={step.id}
-                className={`section-surface journey-card journey-card--${stepState}`}
-              >
-                <div className="journey-card__header">
-                  <div className="journey-card__badge">{step.icon}</div>
-                  <div className="journey-card__heading">
-                    <div className="journey-step__eyebrow">{step.label}</div>
-                    <h2 className="journey-card__title">{step.title}</h2>
-                    <p className="journey-card__copy">{step.description}</p>
-                  </div>
-                  <div className="journey-card__status">
-                    {stepState === "completed" ? <CheckCircleFilled /> : step.icon}
-                    <span>{getJourneyStatusLabel(stepState)}</span>
-                  </div>
+        <div className="journey-layout">
+          <aside className="journey-sidebar">
+            <Card
+              variant="borderless"
+              className={`section-surface demo-stage-card demo-stage-card--${stageTone}`}
+            >
+              <div className={`demo-agent-stage demo-agent-stage--${stageTone}`} aria-live="polite">
+                <div className="demo-agent-stage__ring demo-agent-stage__ring--outer" />
+                <div className="demo-agent-stage__ring demo-agent-stage__ring--inner" />
+                <div className="demo-agent-stage__core">
+                  <RobotOutlined />
                 </div>
+                <div className="demo-agent-stage__signal">{stageTitle}</div>
+              </div>
 
-                {showExpandedBody || showCompactBody ? (
-                  <div
-                    className={`journey-card__body ${
-                      showCompactBody ? "journey-card__body--compact" : ""
-                    }`}
+              <div className="demo-stage-copy">
+                <span className="section-kicker">Live agent status</span>
+                <h2 className="demo-stage-title">{stageTitle}</h2>
+                <p className="section-copy">{stageCopy}</p>
+              </div>
+
+              <div className="demo-stage-progress" aria-hidden="true">
+                <div
+                  className="demo-stage-progress__fill"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+              <div className="demo-stage-progress__meta">
+                <span>{completedStepCount} of 5 steps settled</span>
+                <span>{progressPercent}% complete</span>
+              </div>
+
+              <div className="demo-stage-stats">
+                <div className="demo-stage-stat">
+                  <div className="demo-stage-stat__label">Network</div>
+                  <div className="demo-stage-stat__value">Tempo testnet</div>
+                </div>
+                <div className="demo-stage-stat">
+                  <div className="demo-stage-stat__label">Mode</div>
+                  <div className="demo-stage-stat__value">Agent pays, then retries</div>
+                </div>
+                <div className="demo-stage-stat">
+                  <div className="demo-stage-stat__label">Wallet</div>
+                  <div className="demo-stage-stat__value">{shortenValue(agent.address)}</div>
+                </div>
+                <div className="demo-stage-stat">
+                  <div className="demo-stage-stat__label">Proof</div>
+                  <div className="demo-stage-stat__value">{proofStatusLabel}</div>
+                </div>
+              </div>
+
+              <div className="card-actions">
+                <Button
+                  icon={<CopyOutlined />}
+                  onClick={() => void copy(details.gatewayUrl, "Paid endpoint")}
+                >
+                  Copy paid endpoint
+                </Button>
+                {paymentExplorerUrl ? (
+                  <Button
+                    icon={<LinkOutlined />}
+                    href={paymentExplorerUrl}
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    {renderStepBody(step.id, stepState)}
+                    Open payment proof
+                  </Button>
+                ) : agent.lastFundingExplorerUrl ? (
+                  <Button
+                    icon={<LinkOutlined />}
+                    href={agent.lastFundingExplorerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open funding tx
+                  </Button>
+                ) : null}
+              </div>
+            </Card>
+          </aside>
+
+          <div className="journey-stack">
+            {JOURNEY_STEPS.map((step, index) => {
+              const stepState = getStepState(step.id);
+              const showExpandedBody = stepState === "active" || stepState === "error";
+              const showCompactBody = stepState === "completed";
+
+              return (
+                <Card
+                  key={step.id}
+                  className={`section-surface journey-card journey-card--${stepState}`}
+                  style={{ "--card-index": index } as CSSProperties}
+                >
+                  <div className="journey-card__header">
+                    <div className="journey-card__badge">{step.icon}</div>
+                    <div className="journey-card__heading">
+                      <div className="journey-step__eyebrow">{step.label}</div>
+                      <h2 className="journey-card__title">{step.title}</h2>
+                      <p className="journey-card__copy">{step.description}</p>
+                    </div>
+                    <div className="journey-card__status">
+                      {stepState === "completed" ? <CheckCircleFilled /> : step.icon}
+                      <span>{getJourneyStatusLabel(stepState)}</span>
+                    </div>
                   </div>
-                ) : (
-                  <div className="journey-card__body">{renderLockedBody(step.description)}</div>
-                )}
-              </Card>
-            );
-          })}
+
+                  {showExpandedBody || showCompactBody ? (
+                    <div
+                      className={`journey-card__body ${
+                        showCompactBody ? "journey-card__body--compact" : ""
+                      }`}
+                    >
+                      {renderStepBody(step.id, stepState)}
+                    </div>
+                  ) : (
+                    <div className="journey-card__body">{renderLockedBody(step.description)}</div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
         </div>
       </div>
     </AppShell>

@@ -1,5 +1,22 @@
 import type { PaymentProvider } from "@/lib/types";
 
+const usdFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export function formatUsdAmount(value: number | string) {
+  const numericValue = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    return typeof value === "string" ? `${value} USD` : usdFormatter.format(0);
+  }
+
+  return usdFormatter.format(numericValue);
+}
+
 export function formatStatusLabel(status?: string) {
   if (!status) {
     return "Idle";
